@@ -1,0 +1,143 @@
+---
+title: "Read ERGs from Roland Consult"
+output: html_notebook
+---
+
+
+```{r readFile}
+
+library(dplyr)
+
+  con <- file("Preller_Markus_20041011_1505.csv", "r")
+resultFile <- readLines(con)
+close(con)
+
+results <- strsplit(resultFile, ";")
+
+selector <- 
+  sapply(results, function(x) { if (x[1] == "RAW DATA SECTION:") return(T) else return(F)})
+
+```
+
+```{r read header}
+
+selectorTime <- which(selector) - 1
+
+header1 <- do.call("rbind.data.frame", results[selectorTime])
+
+print(header1[1, c(1, 1, 3, 3, 5, 5)])
+
+names(header1) <- unlist(header1[1, c(1, 1, 3, 3, 5, 5)])
+header1 <- header1[, c(2, 4, 6)]
+
+print(header1)
+
+selectorExam <- which(selector) + 2
+
+header2 <- c(
+  lapply(
+    results[selectorExam], function(x) {
+      x[2] %>% sub("right ", "", .) %>% sub("R-1", "", .)
+    }), 
+  recursive = T)
+
+header <- 
+  data.frame(header1, condition = header2, stimulus_offset = c(.02, .02, .02, .02, NA)) %>%
+  mutate(Dist = as.numeric(as.character(Dist.s.)))
+
+print(header)
+
+```
+
+
+```{r read raw data}
+
+library(dplyr)
+
+selectorOD <- rep(which(selector), each = 4) + 
+  rep(c(2, 4, 6, 8), times = length(which(selector)))
+selectorOS <- rep(which(selector), each = 4) + 
+  rep(c(3, 5, 7, 9), times = length(which(selector)))
+
+resultsRawOD <- results[selectorOD]
+resultsRawOS <- results[selectorOS]
+
+
+resultsRawOD <-
+  lapply(resultsRawOD, 
+       function(x) { 
+         data.frame(condition = x[2] %>% sub("right ", "", .) %>% sub("R-1", "", .), 
+                    eye = "OD", 
+                    t = as.numeric(x[3]) - 1 + 1:128,
+                    value = as.numeric(x[4:131]))
+       }
+)
+resultsRawOD <- do.call("rbind.data.frame", resultsRawOD)
+
+resultsRawOS <-
+  lapply(resultsRawOS, 
+       function(x) { 
+         data.frame(condition = x[2] %>% sub("left ", "", .) %>% sub("L-2", "", .), 
+                    eye = "OS", 
+                    t = as.numeric(x[3]) - 1 + 1:128,
+                    value = as.numeric(x[4:131]))
+       }
+)
+resultsRawOS <- do.call("rbind.data.frame", resultsRawOS)
+
+resultsRaw <- rbind(resultsRawOD, resultsRawOS) %>%
+  left_join(header %>% select(condition, Dist) %>% mutate) %>%
+  mutate(time = (t - 1) * Dist,
+         condition = factor(condition, levels = header$condition,
+                            labels = c("DA rod", "DA mixed", "osc. pot.", "LA mixed", "flicker")),
+         value = value * 1000000)
+
+tail(resultsRaw)
+
+```
+
+```{r adjust baseline}
+
+baseline <-
+  resultsRaw %>%
+  filter((condition == "Flicker") | (time < .02)) %>%
+  group_by(condition, eye) %>%
+  summarize(baseline = mean(value))
+
+resultsRaw <-
+  left_join(resultsRaw, baseline) %>%
+  mutate(value = value - baseline)
+
+head(resultsRaw)
+
+```
+
+
+```{r}
+
+library(ggplot2)
+
+headerPlot <- 
+  header %>%
+  mutate(condition = factor(condition, levels = header$condition,
+                            labels = c("DA rod", "DA mixed", "osc. pot.", "LA mixed", "flicker")))
+
+rbind(resultsRaw, normalValues) %>%
+  mutate(eye = as.factor(eye)) %>%
+ggplot(aes(x = time, y = value)) +
+  geom_line() +
+  geom_vline(aes(xintercept = stimulus_offset), data = headerPlot) +
+  facet_grid(condition ~ eye, drop = T, scales = "free_y") +
+  scale_x_continuous("Time [s]", limits = c(.01, .15))
+  # scale_y_continuous("[µV]", limits = c(-280, 280), breaks = c(-150, 0, 150))
+
+#normalValues <- resultsRaw %>% filter(eye == "OD") %>% mutate(eye = "normal")
+
+#print(normalValues)
+
+#save(normalValues, file = "E:/ERGs/normalERG.Rda")
+
+ggsave("neuronalCeroidLipofuscinosis.png", width = 5, height = 4.5)
+
+```
+
