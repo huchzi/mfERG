@@ -8,7 +8,7 @@ output: html_notebook
 
 library(dplyr)
 
-  con <- file("Preller_Markus_20041011_1505.csv", "r")
+  con <- file("/media/cord/943E-3647/ERGs/Preller_Markus_20041011_1505.csv", "r")
 resultFile <- readLines(con)
 close(con)
 
@@ -116,20 +116,26 @@ head(resultsRaw)
 ```{r}
 
 library(ggplot2)
+library(ggarrange)
 
 headerPlot <- 
   header %>%
   mutate(condition = factor(condition, levels = header$condition,
                             labels = c("DA rod", "DA mixed", "osc. pot.", "LA mixed", "flicker")))
 
+plotData <- 
 rbind(resultsRaw, normalValues) %>%
-  mutate(eye = as.factor(eye)) %>%
-ggplot(aes(x = time, y = value)) +
+  mutate(eye = as.factor(eye))
+
+plot1 <- ggplot(plotData %>% filter(condition %in% c("DA rod", "DA mixed")) %>% mutate(condition = factor(condition)), aes(x = time, y = value)) +
   geom_line() +
   geom_vline(aes(xintercept = stimulus_offset), data = headerPlot) +
   facet_grid(condition ~ eye, drop = T, scales = "free_y") +
-  scale_x_continuous("Time [s]", limits = c(.01, .15))
-  # scale_y_continuous("[µV]", limits = c(-280, 280), breaks = c(-150, 0, 150))
+  scale_x_continuous("Time [s]", limits = c(.01, .15)) +
+  theme_void()
+  # scale_y_continuous("[?V]", limits = c(-280, 280), breaks = c(-150, 0, 150))
+
+print(plot1)
 
 #normalValues <- resultsRaw %>% filter(eye == "OD") %>% mutate(eye = "normal")
 
@@ -137,7 +143,7 @@ ggplot(aes(x = time, y = value)) +
 
 #save(normalValues, file = "E:/ERGs/normalERG.Rda")
 
-ggsave("neuronalCeroidLipofuscinosis.png", width = 5, height = 4.5)
+#ggsave("neuronalCeroidLipofuscinosis.png", width = 5, height = 4.5)
 
 ```
 
