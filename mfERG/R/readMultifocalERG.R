@@ -2,7 +2,7 @@
 readMultifocalERG <- function(pathname)
 {
 
-  con <- file("20121219_OD_FOK.csv", "r")
+  con <- file(pathname, "r")
   resultFile <- readLines(con, encoding = "latin1")
   close(con)
   
